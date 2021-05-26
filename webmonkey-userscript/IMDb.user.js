@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IMDb
 // @description  Watch videos on external website.
-// @version      1.0.0
+// @version      1.0.1
 // @match        *://imdb.com/title/tt*
 // @match        *://*.imdb.com/title/tt*
 // @icon         https://www.imdb.com/favicon.ico
@@ -89,14 +89,13 @@ var redirect_to_url = function(url) {
   }
 }
 
-// ----------------------------------------------------------------------------- prepopulate form fields
+// ----------------------------------------------------------------------------- prepopulate form fields: common
 
-var prepopulate_form_fields = function() {
-  var hash = unsafeWindow.location.hash
-  if (!hash) return
+var update_form_fields_from_regex = function(text, regex) {
+  if (!text  || ('string' !== (typeof text))) return
+  if (!regex || !(regex instanceof RegExp))   return
 
-  var hash_regex = /^#?S(\d+)E(\d+)$/i
-  var matches    = hash_regex.exec(hash)
+  var matches = regex.exec(text)
   if (!matches) return
 
   var season_number  = matches[1]
@@ -104,6 +103,57 @@ var prepopulate_form_fields = function() {
 
   unsafeWindow.document.getElementById(constants.dom_ids.input_season_number).value  = season_number
   unsafeWindow.document.getElementById(constants.dom_ids.input_episode_number).value = episode_number
+}
+
+// ----------------------------------------------------------------------------- prepopulate form fields: from URL #hash
+
+var prepopulate_form_fields = function(episode_deep_link) {
+  var text, regex
+
+  if (episode_deep_link) {
+    var el = unsafeWindow.document.querySelector('a[role="button"][aria-label="View all episodes"][href]')
+    var ul = el.parentNode.querySelector(':scope > ul')
+
+    if (ul) {
+      text = ''
+      var spans = ul.querySelectorAll('span')
+      for (var i=0; i < spans.length; i++) {
+        text += spans[i].innerHTML
+      }
+      text  = text.toLowerCase().replace(/[^a-z0-9]+/g, '')
+      regex = /^s(\d+)e(\d+)$/
+    }
+  }
+  else {
+    text  = unsafeWindow.location.hash
+    regex = /^#?S(\d+)E(\d+)$/i
+  }
+
+  update_form_fields_from_regex(text, regex)
+}
+
+// ----------------------------------------------------------------------------- prepopulate form fields: from event listener
+
+var onclick_episode_label = function(event) {
+  event.stopPropagation();event.stopImmediatePropagation();event.preventDefault();event.returnValue=false;
+
+  var text, regex
+
+  text  = event.target.innerHTML.toLowerCase().replace(/[^a-z0-9]+/g, '')
+  regex = /^s(\d+)ep(\d+)$/
+
+  update_form_fields_from_regex(text, regex)
+}
+
+var add_event_listeners = function() {
+  if (unsafeWindow.location.pathname.toLowerCase().indexOf('/episodes') === -1) return
+
+  var episide_labels = unsafeWindow.document.querySelectorAll('div[itemtype="http://schema.org/TVSeason"] > div.eplist > div.list_item > div.image > a > div > img + div:last-child')
+  if (!episide_labels.length) return
+
+  for (var i=0; i < episide_labels.length; i++) {
+    episide_labels[i].addEventListener('click', onclick_episode_label)
+  }
 }
 
 // ----------------------------------------------------------------------------- prepend form fields to DOM
@@ -121,16 +171,19 @@ var is_series = function() {
 
   el = document.querySelector('script[type="application/ld+json"]')
   if (el) {
-    txt = el.innerHTML
-    if (txt && (txt.replace(/[\r\n\s]+/g, '').indexOf('"@type":"TVSeries"') >= 0))
+    txt = el.innerHTML.replace(/[\r\n\s]+/g, '')
+    if (txt && ((txt.indexOf('"@type":"TVSeries"') >= 0) || (txt.indexOf('"@type":"TVEpisode"') >= 0)))
       return true
   }
+
+  el = unsafeWindow.document.querySelector('a[role="button"][aria-label="View all episodes"][href]')
+  if (el) return true
 
   return false
 }
 
 var open_website = function(event) {
-  event.stopPropagation();event.stopImmediatePropagation();event.preventDefault();event.returnValue=true;
+  event.stopPropagation();event.stopImmediatePropagation();event.preventDefault();event.returnValue=false;
 
   var series, hostname, imdb_id, season_number, episode_number, url
 
@@ -183,7 +236,7 @@ var open_website = function(event) {
     redirect_to_url(url)
 }
 
-var update_dom = function(imdb_id) {
+var update_dom = function(imdb_id, episode_deep_link) {
   var html = [
     '<div>',
     '  <select id="' + constants.dom_ids.select_hostname + '" x-imdb-id="' + imdb_id + '">',
@@ -202,7 +255,7 @@ var update_dom = function(imdb_id) {
   ]
 
   var div    = make_element('div', html.join("\n"))
-  var series = is_series()
+  var series = episode_deep_link || is_series()
 
   div.setAttribute('id',  constants.dom_ids.div_root_container)
   div.querySelector('#' + constants.dom_ids.button_open_website).addEventListener('click', open_website)
@@ -258,7 +311,8 @@ var update_dom = function(imdb_id) {
     return css
   })
 
-  prepopulate_form_fields()
+  if (series)
+    add_event_listeners()
 }
 
 // ----------------------------------------------------------------------------- bootstrap
@@ -266,13 +320,30 @@ var update_dom = function(imdb_id) {
 var init = function() {
   if ((typeof GM_getUrl === 'function') && (GM_getUrl() !== unsafeWindow.location.href)) return
 
-  var path       = unsafeWindow.location.pathname
-  var path_regex = new RegExp('^/title/(tt\\d+)(?:/episodes)?/?$', 'i')
+  var imdb_id, path_regex, path, el, episode_deep_link
 
-  if (!path_regex.test(path)) return
+  imdb_id    = null
+  path_regex = new RegExp('^/title/(tt\\d+)(?:/episodes)?/?$', 'i')
 
-  var imdb_id = path.replace(path_regex, '$1').toLowerCase()
-  update_dom(imdb_id)
+  path = unsafeWindow.location.pathname
+  if (path_regex.test(path))
+    imdb_id = path.replace(path_regex, '$1').toLowerCase()
+
+  if (!imdb_id) return
+
+  el = unsafeWindow.document.querySelector('a[role="button"][aria-label="View all episodes"][href]')
+  if (el) {
+    path = el.getAttribute('href').replace(/^.+?(\/title\/)/, '$1').replace(/\?.*$/, '')
+    if (path_regex.test(path))
+      imdb_id = path.replace(path_regex, '$1').toLowerCase()
+    else
+      el = null
+  }
+  episode_deep_link = !!el
+
+  update_dom(imdb_id, episode_deep_link)
+
+  prepopulate_form_fields(episode_deep_link)
 }
 
 init()
