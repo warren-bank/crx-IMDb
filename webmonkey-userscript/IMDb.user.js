@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IMDb
 // @description  Watch videos on external website.
-// @version      1.0.1
+// @version      1.0.2
 // @match        *://imdb.com/title/tt*
 // @match        *://*.imdb.com/title/tt*
 // @icon         https://www.imdb.com/favicon.ico
@@ -22,6 +22,9 @@ var user_options = {
 }
 
 var constants = {
+  "regexs": {
+    "url_path": new RegExp('^/title/(tt\\d+)(?:/episodes)?/?$', 'i')
+  },
   "dom_ids": {
     "div_root_container":   "webmonkey_div_root_container",
     "div_series_container": "webmonkey_div_series_container",
@@ -68,6 +71,21 @@ var add_style_element = function(css) {
   )
 }
 
+// -----------------------------------------------------------------------------
+
+var extract_season_episode_from_regex = function(text, regex) {
+  if (!text  || ('string' !== (typeof text))) return null
+  if (!regex || !(regex instanceof RegExp))   return null
+
+  var matches = regex.exec(text)
+  if (!matches) return null
+
+  var season_number  = matches[1]
+  var episode_number = matches[2]
+
+  return {season_number: season_number, episode_number: episode_number}
+}
+
 // ----------------------------------------------------------------------------- URL redirect
 
 var redirect_to_url = function(url) {
@@ -89,47 +107,124 @@ var redirect_to_url = function(url) {
   }
 }
 
-// ----------------------------------------------------------------------------- prepopulate form fields: common
+// ----------------------------------------------------------------------------- inspect DOM: deep link for episode in series
 
-var update_form_fields_from_regex = function(text, regex) {
-  if (!text  || ('string' !== (typeof text))) return
-  if (!regex || !(regex instanceof RegExp))   return
-
-  var matches = regex.exec(text)
-  if (!matches) return
-
-  var season_number  = matches[1]
-  var episode_number = matches[2]
-
-  unsafeWindow.document.getElementById(constants.dom_ids.input_season_number).value  = season_number
-  unsafeWindow.document.getElementById(constants.dom_ids.input_episode_number).value = episode_number
-}
-
-// ----------------------------------------------------------------------------- prepopulate form fields: from URL #hash
-
-var prepopulate_form_fields = function(episode_deep_link) {
+var get_episode_deep_link = function() {
+  var imdb_id, season_number, episode_number
+  var el, path
+  var ul, spans, child
   var text, regex
 
-  if (episode_deep_link) {
-    var el = unsafeWindow.document.querySelector('a[role="button"][aria-label="View all episodes"][href]')
-    var ul = el.parentNode.querySelector(':scope > ul')
-
-    if (ul) {
-      text = ''
-      var spans = ul.querySelectorAll('span')
-      for (var i=0; i < spans.length; i++) {
-        text += spans[i].innerHTML
-      }
-      text  = text.toLowerCase().replace(/[^a-z0-9]+/g, '')
-      regex = /^s(\d+)e(\d+)$/
+  var process_regex = function() {
+    var result = extract_season_episode_from_regex(text, regex)
+    if (result) {
+      season_number  = result.season_number
+      episode_number = result.episode_number
     }
+    else {
+      imdb_id = null
+      el      = null
+    }
+  }
+
+  // site appears to use A/B testing; DOM is not consistent across page reloads (without using cookies)
+
+  if (!imdb_id) {
+    el = unsafeWindow.document.querySelector('a[role="button"][aria-label="View all episodes"][href]')
+    if (el) {
+      path = el.getAttribute('href').replace(/^.+?(\/title\/)/, '$1').replace(/\?.*$/, '')
+      if (constants.regexs.url_path.test(path))
+        imdb_id = path.replace(constants.regexs.url_path, '$1').toLowerCase()
+      else
+        el = null
+    }
+    if (el) {
+      ul = el.parentNode.querySelector(':scope > ul')
+      if (ul) {
+        text = ''
+        spans = ul.querySelectorAll('span')
+        for (var i=0; i < spans.length; i++) {
+          text += spans[i].innerHTML
+        }
+        text  = text.toLowerCase().replace(/[^a-z0-9]+/g, '')
+        regex = /^s(?:eason)?(\d+)e(?:pisode)?(\d+)$/
+        process_regex()
+      }
+      else {
+        imdb_id = null
+        el      = null
+      }
+    }
+  }
+
+  if (!imdb_id) {
+    el = unsafeWindow.document.querySelector('div.button_panel.navigation_panel > a.bp_item.np_all')
+    if (el) {
+      text = el.innerHTML.replace(/[\r\n\s]+/g, '').toLowerCase()
+      if (text.indexOf('allepisodes') === -1)
+        el = null
+    }
+    if (el) {
+      path = el.getAttribute('href').replace(/^.+?(\/title\/)/, '$1').replace(/\?.*$/, '')
+      if (constants.regexs.url_path.test(path))
+        imdb_id = path.replace(constants.regexs.url_path, '$1').toLowerCase()
+      else
+        el = null
+    }
+    if (el) {
+      el = el.parentNode.querySelector(':scope > div.bp_item.bp_text_only div.bp_heading')
+      if (el) {
+        text = ''
+        for (var i=0; i < el.childNodes.length; i++) {
+          child = el.childNodes[i]
+          if (child.nodeType === 3) {
+            // text node
+            text += child.textContent
+          }
+        }
+        text  = text.toLowerCase().replace(/[^a-z0-9]+/g, '')
+        regex = /^s(?:eason)?(\d+)e(?:pisode)?(\d+)$/
+        process_regex()
+      }
+      else {
+        imdb_id = null
+      }
+    }
+  }
+
+  if (imdb_id)
+    return {imdb_id: imdb_id, season_number: season_number, episode_number: episode_number}
+}
+
+// ----------------------------------------------------------------------------- prepopulate form fields: common
+
+var update_form_fields_from_season_episode = function(data) {
+  if (!data) return
+
+  unsafeWindow.document.getElementById(constants.dom_ids.input_season_number).value  = data.season_number
+  unsafeWindow.document.getElementById(constants.dom_ids.input_episode_number).value = data.episode_number
+}
+
+var update_form_fields_from_regex = function(text, regex) {
+  update_form_fields_from_season_episode(
+    extract_season_episode_from_regex(text, regex)
+  )
+}
+
+// ----------------------------------------------------------------------------- prepopulate form fields: from DOM or URL #hash
+
+var prepopulate_form_fields = function(episode_deep_link_data) {
+  var text, regex
+
+  if (episode_deep_link_data) {
+    update_form_fields_from_season_episode(episode_deep_link_data)
   }
   else {
     text  = unsafeWindow.location.hash
     regex = /^#?S(\d+)E(\d+)$/i
-  }
 
-  update_form_fields_from_regex(text, regex)
+    update_form_fields_from_regex(text, regex)
+  }
 }
 
 // ----------------------------------------------------------------------------- prepopulate form fields: from event listener
@@ -175,9 +270,6 @@ var is_series = function() {
     if (txt && ((txt.indexOf('"@type":"TVSeries"') >= 0) || (txt.indexOf('"@type":"TVEpisode"') >= 0)))
       return true
   }
-
-  el = unsafeWindow.document.querySelector('a[role="button"][aria-label="View all episodes"][href]')
-  if (el) return true
 
   return false
 }
@@ -236,7 +328,7 @@ var open_website = function(event) {
     redirect_to_url(url)
 }
 
-var update_dom = function(imdb_id, episode_deep_link) {
+var update_dom = function(imdb_id) {
   var html = [
     '<div>',
     '  <select id="' + constants.dom_ids.select_hostname + '" x-imdb-id="' + imdb_id + '">',
@@ -255,7 +347,7 @@ var update_dom = function(imdb_id, episode_deep_link) {
   ]
 
   var div    = make_element('div', html.join("\n"))
-  var series = episode_deep_link || is_series()
+  var series = is_series()
 
   div.setAttribute('id',  constants.dom_ids.div_root_container)
   div.querySelector('#' + constants.dom_ids.button_open_website).addEventListener('click', open_website)
@@ -320,30 +412,19 @@ var update_dom = function(imdb_id, episode_deep_link) {
 var init = function() {
   if ((typeof GM_getUrl === 'function') && (GM_getUrl() !== unsafeWindow.location.href)) return
 
-  var imdb_id, path_regex, path, el, episode_deep_link
-
-  imdb_id    = null
-  path_regex = new RegExp('^/title/(tt\\d+)(?:/episodes)?/?$', 'i')
+  var path, imdb_id, episode_deep_link_data
 
   path = unsafeWindow.location.pathname
-  if (path_regex.test(path))
-    imdb_id = path.replace(path_regex, '$1').toLowerCase()
+  if (!constants.regexs.url_path.test(path)) return
 
-  if (!imdb_id) return
+  imdb_id                = path.replace(constants.regexs.url_path, '$1').toLowerCase()
+  episode_deep_link_data = get_episode_deep_link()
 
-  el = unsafeWindow.document.querySelector('a[role="button"][aria-label="View all episodes"][href]')
-  if (el) {
-    path = el.getAttribute('href').replace(/^.+?(\/title\/)/, '$1').replace(/\?.*$/, '')
-    if (path_regex.test(path))
-      imdb_id = path.replace(path_regex, '$1').toLowerCase()
-    else
-      el = null
-  }
-  episode_deep_link = !!el
+  if (episode_deep_link_data)
+    imdb_id              = episode_deep_link_data.imdb_id
 
-  update_dom(imdb_id, episode_deep_link)
-
-  prepopulate_form_fields(episode_deep_link)
+  update_dom(imdb_id)
+  prepopulate_form_fields(episode_deep_link_data)
 }
 
 init()
