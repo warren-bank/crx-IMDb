@@ -1,11 +1,14 @@
 // ==UserScript==
 // @name         IMDb
 // @description  Watch videos on external website.
-// @version      1.0.2
+// @version      1.0.3
 // @match        *://imdb.com/title/tt*
 // @match        *://*.imdb.com/title/tt*
 // @icon         https://www.imdb.com/favicon.ico
 // @run-at       document-end
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @grant        unsafeWindow
 // @homepage     https://github.com/warren-bank/crx-IMDb/tree/webmonkey-userscript/es5
 // @supportURL   https://github.com/warren-bank/crx-IMDb/issues
 // @downloadURL  https://github.com/warren-bank/crx-IMDb/raw/webmonkey-userscript/es5/webmonkey-userscript/IMDb.user.js
@@ -84,6 +87,42 @@ var extract_season_episode_from_regex = function(text, regex) {
   var episode_number = matches[2]
 
   return {season_number: season_number, episode_number: episode_number}
+}
+
+// ----------------------------------------------------------------------------- persistent cache
+
+var is_persistent_storage_available = function() {
+  return ((typeof GM_setValue === 'function') && (typeof GM_getValue === 'function'))
+}
+
+var set_cache = function(imdb_id, season_number, episode_number) {
+  if (!is_persistent_storage_available()) return
+
+  var json = JSON.stringify({
+    "s": season_number,
+    "e": episode_number
+  })
+
+  GM_setValue(imdb_id, json)
+}
+
+var get_cache = function(imdb_id, auto_increment) {
+  if (!is_persistent_storage_available()) return null
+
+  var json = GM_getValue(imdb_id, '')
+  if (!json) return null
+
+  try {
+    var data = JSON.parse(json)
+
+    if (auto_increment)
+      data.e++
+
+    return {season_number: data.s, episode_number: data.e}
+  }
+  catch(e){
+    return null
+  }
 }
 
 // ----------------------------------------------------------------------------- URL redirect
@@ -192,39 +231,47 @@ var get_episode_deep_link = function() {
     }
   }
 
-  if (imdb_id)
-    return {imdb_id: imdb_id, season_number: season_number, episode_number: episode_number}
+  return (imdb_id)
+    ? {imdb_id: imdb_id, season_number: season_number, episode_number: episode_number}
+    : null
 }
 
 // ----------------------------------------------------------------------------- prepopulate form fields: common
 
 var update_form_fields_from_season_episode = function(data) {
-  if (!data) return
+  if (!data) return false
 
   unsafeWindow.document.getElementById(constants.dom_ids.input_season_number).value  = data.season_number
   unsafeWindow.document.getElementById(constants.dom_ids.input_episode_number).value = data.episode_number
+  return true
 }
 
 var update_form_fields_from_regex = function(text, regex) {
-  update_form_fields_from_season_episode(
+  return update_form_fields_from_season_episode(
     extract_season_episode_from_regex(text, regex)
   )
 }
 
-// ----------------------------------------------------------------------------- prepopulate form fields: from DOM or URL #hash
+// ----------------------------------------------------------------------------- prepopulate form fields: from DOM or URL #hash or persistent cache
 
-var prepopulate_form_fields = function(episode_deep_link_data) {
-  var text, regex
+var prepopulate_form_fields = function(imdb_id, episode_deep_link_data) {
+  var OK, text, regex
 
   if (episode_deep_link_data) {
-    update_form_fields_from_season_episode(episode_deep_link_data)
+    OK = update_form_fields_from_season_episode(episode_deep_link_data)
   }
   else {
     text  = unsafeWindow.location.hash
     regex = /^#?S(\d+)E(\d+)$/i
 
-    update_form_fields_from_regex(text, regex)
+    OK = update_form_fields_from_regex(text, regex)
   }
+
+  if (!OK) {
+    OK = update_form_fields_from_season_episode(get_cache(imdb_id, /* auto_increment= */ true))
+  }
+
+  return OK
 }
 
 // ----------------------------------------------------------------------------- prepopulate form fields: from event listener
@@ -323,6 +370,9 @@ var open_website = function(event) {
         : ('http://database.gdriveplayer.us/player.php?imdb=' + imdb_id)
       break
   }
+
+  if (series)
+    set_cache(imdb_id, season_number, episode_number)
 
   if (url)
     redirect_to_url(url)
@@ -424,7 +474,7 @@ var init = function() {
     imdb_id              = episode_deep_link_data.imdb_id
 
   update_dom(imdb_id)
-  prepopulate_form_fields(episode_deep_link_data)
+  prepopulate_form_fields(imdb_id, episode_deep_link_data)
 }
 
 init()
