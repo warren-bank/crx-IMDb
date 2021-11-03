@@ -9,6 +9,7 @@ Its purpose is to:
   - provide ability to open a video player on external websites:
     * [VidSrc](https://vidsrc.me/)
     * [Gdrive Player](https://gdriveplayer.to/)
+    * [2Embed](https://www.2embed.ru/)
 
 #### Legal:
 
