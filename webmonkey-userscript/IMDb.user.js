@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IMDb
 // @description  Watch videos on external website.
-// @version      1.0.5
+// @version      1.0.6
 // @match        *://imdb.com/title/tt*
 // @match        *://*.imdb.com/title/tt*
 // @icon         https://www.imdb.com/favicon.ico
@@ -45,6 +45,12 @@ var strings = {
     "episode_number":       "Episode #",
     "open_website":         "Open Video Player"
   }
+}
+
+// ----------------------------------------------------------------------------- state
+
+var state = {
+  "select_hostname_value":  null
 }
 
 // ----------------------------------------------------------------------------- helpers
@@ -329,7 +335,11 @@ var open_website = function(event) {
   series   = is_series()
   hostname = unsafeWindow.document.getElementById(constants.dom_ids.select_hostname)
   imdb_id  = hostname.getAttribute('x-imdb-id')
-  hostname = parseInt( hostname.value, 10 )
+
+  hostname = (state.select_hostname_value)
+    ? state.select_hostname_value
+    : hostname.options[hostname.selectedIndex].value
+  hostname = parseInt( hostname, 10 )
 
   if (series) {
     season_number  = parseInt( unsafeWindow.document.getElementById(constants.dom_ids.input_season_number).value,  10 )
@@ -395,7 +405,7 @@ var open_website = function(event) {
 var update_dom = function(imdb_id) {
   var html = [
     '<div>',
-    '  <select id="' + constants.dom_ids.select_hostname + '" x-imdb-id="' + imdb_id + '">',
+    '  <select id="' + constants.dom_ids.select_hostname + '" x-imdb-id="' + imdb_id + '" onchange="state.select_hostname_value = this.value">',
     '    <option value="0">' + strings.labels.hostname + '</option>',
     '    <option value="1">Vidcloud</option>',
     '    <option value="2">VidSrc</option>',
@@ -475,6 +485,22 @@ var update_dom = function(imdb_id) {
 
 // ----------------------------------------------------------------------------- bootstrap
 
+var clear_all_timeouts = function() {
+  var maxId = unsafeWindow.setTimeout(function(){}, 1000)
+
+  for (var i=0; i <= maxId; i++) {
+    unsafeWindow.clearTimeout(i)
+  }
+}
+
+var clear_all_intervals = function() {
+  var maxId = unsafeWindow.setInterval(function(){}, 1000)
+
+  for (var i=0; i <= maxId; i++) {
+    unsafeWindow.clearInterval(i)
+  }
+}
+
 var init = function() {
   if ((typeof GM_getUrl === 'function') && (GM_getUrl() !== unsafeWindow.location.href)) return
 
@@ -488,6 +514,9 @@ var init = function() {
 
   if (episode_deep_link_data)
     imdb_id              = episode_deep_link_data.imdb_id
+
+  clear_all_timeouts()
+  clear_all_intervals()
 
   update_dom(imdb_id)
   prepopulate_form_fields(imdb_id, episode_deep_link_data)
