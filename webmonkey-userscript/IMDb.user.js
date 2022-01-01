@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IMDb
 // @description  Watch videos on external website.
-// @version      1.0.7
+// @version      1.0.8
 // @match        *://imdb.com/title/tt*
 // @match        *://*.imdb.com/title/tt*
 // @icon         https://www.imdb.com/favicon.ico
@@ -381,10 +381,17 @@ var open_website = function(event) {
       break
 
     case 4:
-      // 2embed.ru
+      // 2Embed
       url = series
         ? ('https://www.2embed.ru/embed/imdb/tv?id='    + imdb_id + '&s=' + season_number + '&e=' + episode_number)
         : ('https://www.2embed.ru/embed/imdb/movie?id=' + imdb_id)
+      break
+
+    case 5:
+      // Apimdb
+      url = series
+        ? ('https://v2.apimdb.net/e/tv/'    + imdb_id + '/' + season_number + '/' + episode_number)
+        : ('https://v2.apimdb.net/e/movie/' + imdb_id)
       break
   }
 
@@ -404,6 +411,7 @@ var update_dom = function(imdb_id) {
     '    <option value="2">VidSrc</option>',
     '    <option value="3">Gdrive Player</option>',
     '    <option value="4">2Embed</option>',
+    '    <option value="5">Apimdb</option>',
     '  </select>',
     '</div>',
     '<div id="' + constants.dom_ids.div_series_container + '">',

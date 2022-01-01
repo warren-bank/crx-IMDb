@@ -11,6 +11,7 @@ Its purpose is to:
     * [VidSrc](https://vidsrc.me/)
     * [Gdrive Player](https://gdriveplayer.to/)
     * [2Embed](https://www.2embed.ru/)
+    * [Apimdb](https://v2.apimdb.net/)
 
 #### Legal:
 
