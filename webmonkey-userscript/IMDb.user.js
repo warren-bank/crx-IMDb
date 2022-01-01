@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IMDb
 // @description  Watch videos on external website.
-// @version      1.0.6
+// @version      1.0.7
 // @match        *://imdb.com/title/tt*
 // @match        *://*.imdb.com/title/tt*
 // @icon         https://www.imdb.com/favicon.ico
@@ -313,16 +313,9 @@ var is_series = function() {
   if (txt && (txt.toLowerCase().indexOf('/episodes') > 0))
     return true
 
-  txt = unsafeWindow.document.title
-  if (txt && (txt.toLowerCase().indexOf('tv series') >= 0))
+  el = unsafeWindow.document.querySelector('a[href^="episodes"]')
+  if (el)
     return true
-
-  el = document.querySelector('script[type="application/ld+json"]')
-  if (el) {
-    txt = el.innerHTML.replace(/[\r\n\s]+/g, '')
-    if (txt && ((txt.indexOf('"@type":"TVSeries"') >= 0) || (txt.indexOf('"@type":"TVEpisode"') >= 0)))
-      return true
-  }
 
   return false
 }
@@ -431,9 +424,9 @@ var update_dom = function(imdb_id) {
   if (!series)
     div.querySelector('#' + constants.dom_ids.div_series_container).style.display = 'none'
 
-  document.body.insertBefore(
+  unsafeWindow.document.body.insertBefore(
     div,
-    document.body.childNodes[0]
+    unsafeWindow.document.body.childNodes[0]
   )
 
   add_style_element(function(){
