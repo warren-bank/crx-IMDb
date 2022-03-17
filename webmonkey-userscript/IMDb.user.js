@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IMDb
 // @description  Watch videos on external website.
-// @version      1.0.8
+// @version      1.0.9
 // @match        *://imdb.com/title/tt*
 // @match        *://*.imdb.com/title/tt*
 // @icon         https://www.imdb.com/favicon.ico
@@ -50,7 +50,8 @@ var strings = {
 // ----------------------------------------------------------------------------- state
 
 var state = {
-  "select_hostname_value":  null
+  "select_hostname_value":  null,
+  "is_series":              null
 }
 
 // ----------------------------------------------------------------------------- helpers
@@ -155,6 +156,40 @@ var redirect_to_url = function(url) {
 // ----------------------------------------------------------------------------- inspect DOM: deep link for episode in series
 
 var get_episode_deep_link = function() {
+  return get_episode_deep_link_json() || get_episode_deep_link_text()
+}
+
+// -------------------------------------
+
+var get_episode_deep_link_json = function() {
+  var imdb_id, season_number, episode_number
+  var json
+
+  try {
+    json = unsafeWindow.document.querySelector('script#__NEXT_DATA__[type="application/json"]')
+    json = json.innerText
+    json = JSON.parse(json)
+
+    if (json.props.pageProps.aboveTheFoldData.titleType.isEpisode) {
+      state.is_series = true
+
+      imdb_id         = json.props.pageProps.aboveTheFoldData.series.series.id
+      season_number   = json.props.pageProps.aboveTheFoldData.series.episodeNumber.seasonNumber
+      episode_number  = json.props.pageProps.aboveTheFoldData.series.episodeNumber.episodeNumber
+
+      return {imdb_id: imdb_id, season_number: season_number, episode_number: episode_number}
+    }
+    else if (json.props.pageProps.aboveTheFoldData.titleType.isSeries) {
+      state.is_series = true
+    }
+  }
+  catch(e) {}
+  return null
+}
+
+// -------------------------------------
+
+var get_episode_deep_link_text = function() {
   var imdb_id, season_number, episode_number
   var el, path
   var ul, spans, child
@@ -307,6 +342,9 @@ var add_event_listeners = function() {
 // ----------------------------------------------------------------------------- prepend form fields to DOM
 
 var is_series = function() {
+  if (state.is_series)
+    return true
+
   var txt, el
 
   txt = unsafeWindow.location.pathname
