@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IMDb
 // @description  Watch videos on external website.
-// @version      1.0.9
+// @version      1.0.10
 // @match        *://imdb.com/title/tt*
 // @match        *://*.imdb.com/title/tt*
 // @icon         https://www.imdb.com/favicon.ico
@@ -342,20 +342,25 @@ var add_event_listeners = function() {
 // ----------------------------------------------------------------------------- prepend form fields to DOM
 
 var is_series = function() {
-  if (state.is_series)
-    return true
-
   var txt, el
 
-  txt = unsafeWindow.location.pathname
-  if (txt && (txt.toLowerCase().indexOf('/episodes') > 0))
-    return true
+  if (typeof state.is_series !== 'boolean') {
+    if (!state.is_series) {
+      txt = unsafeWindow.location.pathname
+      if (txt && (txt.toLowerCase().indexOf('/episodes') > 0))
+        state.is_series = true
+    }
 
-  el = unsafeWindow.document.querySelector('a[href^="episodes"]')
-  if (el)
-    return true
+    if (!state.is_series) {
+      el = unsafeWindow.document.querySelector('a[href^="episodes"]')
+      if (el)
+        state.is_series = true
+    }
 
-  return false
+    state.is_series = false
+  }
+
+  return state.is_series
 }
 
 var open_website = function(event) {
