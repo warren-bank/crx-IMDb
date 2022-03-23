@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IMDb
 // @description  Watch videos on external website.
-// @version      1.0.10
+// @version      1.0.11
 // @match        *://imdb.com/title/tt*
 // @match        *://*.imdb.com/title/tt*
 // @icon         https://www.imdb.com/favicon.ico
@@ -218,7 +218,7 @@ var get_episode_deep_link_text = function() {
       else
         el = null
     }
-    if (el) {
+    if (!imdb_id && el) {
       ul = el.parentNode.querySelector(':scope > ul')
       if (ul) {
         text = ''
@@ -230,10 +230,17 @@ var get_episode_deep_link_text = function() {
         regex = /^s(?:eason)?(\d+)e(?:pisode)?(\d+)$/
         process_regex()
       }
-      else {
-        imdb_id = null
-        el      = null
+    }
+    if (!imdb_id && el) {
+      spans = el.parentNode.querySelector(':scope > div[data-testid="hero-subnav-bar-season-episode-numbers-section-xs"]')
+      if (spans) {
+        text = spans.innerText.toLowerCase().replace(/[^a-z0-9]+/g, '')
+        regex = /^s(?:eason)?(\d+)e(?:pisode)?(\d+)$/
+        process_regex()
       }
+    }
+    if (!imdb_id && el) {
+      el = null
     }
   }
 
@@ -357,7 +364,9 @@ var is_series = function() {
         state.is_series = true
     }
 
-    state.is_series = false
+    if (!state.is_series) {
+      state.is_series = false
+    }
   }
 
   return state.is_series
