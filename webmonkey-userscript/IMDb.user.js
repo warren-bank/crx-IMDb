@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IMDb
 // @description  Watch videos on external website.
-// @version      1.0.11
+// @version      1.0.12
 // @match        *://imdb.com/title/tt*
 // @match        *://*.imdb.com/title/tt*
 // @icon         https://www.imdb.com/favicon.ico
@@ -412,38 +412,24 @@ var open_website = function(event) {
   // construct website URL
   switch(hostname) {
     case 1:
-      // Vidcloud
-      url = series
-        ? ('https://vidclouds.us/tv.php?imdb=' + imdb_id + '&season=' + season_number + '&episode=' + episode_number)
-        : ('https://vidclouds.us/' + imdb_id + '.html')
-      break
-
-    case 2:
       // VidSrc
       url = series
         ? ('https://vidsrc.me/embed/' + imdb_id + '/' + season_number + '-' + episode_number + '/')
         : ('https://vidsrc.me/embed/' + imdb_id + '/')
       break
 
-    case 3:
+    case 2:
       // Gdrive Player
       url = series
         ? ('http://database.gdriveplayer.us/player.php?imdb=' + imdb_id + '&type=series&season=' + season_number + '&episode=' + episode_number)
         : ('http://database.gdriveplayer.us/player.php?imdb=' + imdb_id)
       break
 
-    case 4:
+    case 3:
       // 2Embed
       url = series
-        ? ('https://www.2embed.ru/embed/imdb/tv?id='    + imdb_id + '&s=' + season_number + '&e=' + episode_number)
-        : ('https://www.2embed.ru/embed/imdb/movie?id=' + imdb_id)
-      break
-
-    case 5:
-      // Apimdb
-      url = series
-        ? ('https://v2.apimdb.net/e/tv/'    + imdb_id + '/' + season_number + '/' + episode_number)
-        : ('https://v2.apimdb.net/e/movie/' + imdb_id)
+        ? ('https://www.2embed.to/embed/imdb/tv?id='    + imdb_id + '&s=' + season_number + '&e=' + episode_number)
+        : ('https://www.2embed.to/embed/imdb/movie?id=' + imdb_id)
       break
   }
 
@@ -459,11 +445,9 @@ var update_dom = function(imdb_id) {
     '<div>',
     '  <select id="' + constants.dom_ids.select_hostname + '" x-imdb-id="' + imdb_id + '" onchange="state.select_hostname_value = this.value">',
     '    <option value="0">' + strings.labels.hostname + '</option>',
-    '    <option value="1">Vidcloud</option>',
-    '    <option value="2">VidSrc</option>',
-    '    <option value="3">Gdrive Player</option>',
-    '    <option value="4">2Embed</option>',
-    '    <option value="5">Apimdb</option>',
+    '    <option value="1">VidSrc</option>',
+    '    <option value="2">Gdrive Player</option>',
+    '    <option value="3">2Embed</option>',
     '  </select>',
     '</div>',
     '<div id="' + constants.dom_ids.div_series_container + '">',
